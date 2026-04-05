@@ -171,17 +171,41 @@ const countsAsDowntime = (impact) => impact === 'minor' || impact === 'major';
 
 // Resolve the [start, end] interval for a Status.io incident object.
 // Prefers overlap_start/overlap_end; falls back to datetime_open + duration (minutes).
+// Parse a Status.io date string as UTC.
+// API returns "YYYY-MM-DD HH:MM:SS" (space-separated, no tz) — must be treated as UTC.
+// ISO strings like "2026-01-27T09:59:00.000Z" are already fine.
+const parseStatusIoDate = (str) => {
+  if (!str) return null;
+  const s = String(str).trim();
+  // If it has a T or Z it's already ISO — pass through
+  if (s.includes('T') || s.includes('Z') || s.includes('+')) {
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  // "YYYY-MM-DD HH:MM:SS" → append Z to force UTC interpretation
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+// Parse Status.io duration strings: "14h 1m", "24h", "42m", "1h 30m" → minutes
+const parseDurationMinutes = (str) => {
+  if (!str) return 0;
+  if (typeof str === 'number') return str;
+  const s = String(str);
+  const hours = s.match(/(\d+)\s*h/);
+  const mins = s.match(/(\d+)\s*m/);
+  return (hours ? parseInt(hours[1], 10) * 60 : 0) + (mins ? parseInt(mins[1], 10) : 0);
+};
+
+// Resolve the [start, end] interval for a Status.io incident object.
+// Prefers overlap_start/overlap_end (parsed as UTC); falls back to datetime_open + duration.
 const incidentInterval = (incident) => {
-  if (incident.overlap_start && incident.overlap_end) {
-    const start = new Date(incident.overlap_start);
-    const end = new Date(incident.overlap_end);
-    if (!Number.isNaN(start) && !Number.isNaN(end) && end > start) return [start, end];
-  }
-  if (incident.datetime_open && incident.duration) {
-    const start = new Date(incident.datetime_open);
-    const durationMs = Number(incident.duration) * 60 * 1000;
-    if (!Number.isNaN(start) && durationMs > 0) return [start, new Date(start.getTime() + durationMs)];
-  }
+  const start = parseStatusIoDate(incident.overlap_start);
+  const end = parseStatusIoDate(incident.overlap_end);
+  if (start && end && end > start) return [start, end];
+  const open = parseStatusIoDate(incident.datetime_open);
+  const durationMs = parseDurationMinutes(incident.duration) * 60 * 1000;
+  if (open && durationMs > 0) return [open, new Date(open.getTime() + durationMs)];
   return null;
 };
 
