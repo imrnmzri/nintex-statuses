@@ -107,6 +107,12 @@ const shareStateMeta = {
   },
 };
 
+const parseDayDate = (str) => {
+  if (!str) return null;
+  const d = new Date(str + ' UTC');
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const formatDate = (date) =>
   new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -752,19 +758,22 @@ const render = async () => {
 
   components.forEach((component) => {
     const days = component.days || [];
-    days.forEach((day, index) => {
-      if (index >= 90) return;
+    days.forEach((day) => {
+      const dayDate = parseDayDate(day.date);
+      if (!dayDate) return;
+      const barIndex = Math.round((dayDate.getTime() - rangeStart.getTime()) / 86400000);
+      if (barIndex < 0 || barIndex >= 90) return;
       const impact = statusToImpact(day.status);
       const rank = impactRank[impact] ?? 0;
-      platformDaySeverity[index] = Math.max(platformDaySeverity[index], rank);
+      platformDaySeverity[barIndex] = Math.max(platformDaySeverity[barIndex], rank);
 
       (day.incidents || []).forEach((incident) => {
         const id = incident.id || incident.name;
         if (!id) return;
-        const existing = platformDayIncidents[index].get(id);
+        const existing = platformDayIncidents[barIndex].get(id);
         const iv = incidentInterval(incident);
         if (!existing || rank > (impactRank[existing.impact] ?? 0)) {
-          platformDayIncidents[index].set(id, {
+          platformDayIncidents[barIndex].set(id, {
             id,
             title: incident.name || id,
             impact,
@@ -807,7 +816,7 @@ const render = async () => {
             impact,
             overlap_start: iv[0].toISOString(),
             overlap_end: iv[1].toISOString(),
-            url: `https://status.nintex.com/incidents/${id}`,
+            url: incidentUrl(id),
           });
         }
       }
@@ -1005,25 +1014,28 @@ const render = async () => {
     const dayIncidents = Array.from({ length: 90 }, () => new Map());
     const intervals = [];
 
-    days.forEach((day, index) => {
-      if (index >= 90) return;
+    days.forEach((day) => {
+      const dayDate = parseDayDate(day.date);
+      if (!dayDate) return;
+      const barIndex = Math.round((dayDate.getTime() - rangeStart.getTime()) / 86400000);
+      if (barIndex < 0 || barIndex >= 90) return;
       const impact = statusToImpact(day.status);
       const rank = impactRank[impact] ?? 0;
-      daySeverity[index] = rank;
+      daySeverity[barIndex] = rank;
 
       (day.incidents || []).forEach((incident) => {
         const id = incident.id || incident.name;
         if (!id) return;
-        const existing = dayIncidents[index].get(id);
+        const existing = dayIncidents[barIndex].get(id);
         const iv = incidentInterval(incident);
         if (!existing || rank > (impactRank[existing.impact] ?? 0)) {
-          dayIncidents[index].set(id, {
+          dayIncidents[barIndex].set(id, {
             id,
             title: incident.name || id,
             impact,
             overlap_start: iv ? iv[0].toISOString() : incident.overlap_start,
             overlap_end: iv ? iv[1].toISOString() : incident.overlap_end,
-            url: `https://status.nintex.com/incidents/${id}`,
+            url: incidentUrl(id),
           });
         }
         if (countsAsDowntime(impact) && iv) {
@@ -1059,7 +1071,7 @@ const render = async () => {
             impact,
             overlap_start: iv[0].toISOString(),
             overlap_end: iv[1].toISOString(),
-            url: `https://status.nintex.com/incidents/${id}`,
+            url: incidentUrl(id),
           });
         }
       }
@@ -1118,7 +1130,7 @@ const render = async () => {
           impact,
           datetime_open: incident.datetime_open,
           duration: incident.duration,
-          url: `https://status.nintex.com/incidents/${id}`,
+          url: incidentUrl(id),
         });
       });
     });
