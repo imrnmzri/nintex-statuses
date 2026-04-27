@@ -1,5 +1,9 @@
 name: Deploy Pages
 on:
+  workflow_run:
+    workflows: ["Fetch Nintex Uptime"]
+    types:
+      - completed
   push:
     branches: [main]
   workflow_dispatch:
