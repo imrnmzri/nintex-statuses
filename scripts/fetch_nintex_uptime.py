@@ -136,7 +136,7 @@ def fetch():
         "maintenance": data.get("maintenance", {}),
     }
 
-    with open("../data/nintex-uptime.json", "w") as f:
+    with open("data/nintex-uptime.json", "w") as f:
         json.dump(result, f, indent=2)
 
     print(f"Fetched at {result['fetched_at']}")
